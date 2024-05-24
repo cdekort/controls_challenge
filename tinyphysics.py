@@ -6,7 +6,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import signal
-
 from collections import namedtuple
 from hashlib import md5
 from pathlib import Path
@@ -29,7 +28,6 @@ DEL_T = 0.1
 LAT_ACCEL_COST_MULTIPLIER = 5.0
 
 State = namedtuple('State', ['roll_lataccel', 'v_ego', 'a_ego'])
-
 
 class LataccelTokenizer:
   def __init__(self):
@@ -156,13 +154,14 @@ class TinyPhysicsSimulator:
 
   def plot_data(self, ax, lines, axis_labels, title) -> None:
     ax.clear()
-    for line, label in lines:
-      ax.plot(line, label=label)
-    ax.axline((CONTROL_START_IDX, 0), (CONTROL_START_IDX, 1), color='black', linestyle='--', alpha=0.5, label='Control Start')
-    ax.legend()
-    ax.set_title(f"{title} | Step: {self.step_idx}")
-    ax.set_xlabel(axis_labels[0])
-    ax.set_ylabel(axis_labels[1])
+    if not args.no_graph:
+      for line, label in lines:
+        ax.plot(line, label=label)
+      ax.axline((CONTROL_START_IDX, 0), (CONTROL_START_IDX, 1), color='black', linestyle='--', alpha=0.5, label='Control Start')
+      ax.legend()
+      ax.set_title(f"{title} | Step: {self.step_idx}")
+      ax.set_xlabel(axis_labels[0])
+      ax.set_ylabel(axis_labels[1])
 
   def compute_cost(self) -> dict:
     target = np.array(self.target_lataccel_history)[CONTROL_START_IDX:]
@@ -174,7 +173,7 @@ class TinyPhysicsSimulator:
     return {'lataccel_cost': lat_accel_cost, 'jerk_cost': jerk_cost, 'total_cost': total_cost}
 
   def rollout(self) -> float:
-    if self.debug:
+    if self.debug and not args.no_graph:
       plt.ion()
       fig, ax = plt.subplots(4, figsize=(12, 14), constrained_layout=True)
 
@@ -182,15 +181,17 @@ class TinyPhysicsSimulator:
       self.step()
       if self.debug and self.step_idx % 10 == 0:
         print(f"Step {self.step_idx:<5}: Current lataccel: {self.current_lataccel:>6.2f}, Target lataccel: {self.target_lataccel_history[-1]:>6.2f}")
-        self.plot_data(ax[0], [(self.target_lataccel_history, 'Target lataccel'), (self.current_lataccel_history, 'Current lataccel')], ['Step', 'Lateral Acceleration'], 'Lateral Acceleration')
-        self.plot_data(ax[1], [(self.action_history, 'Action')], ['Step', 'Action'], 'Action')
-        self.plot_data(ax[2], [(np.array(self.state_history)[:, 0], 'Roll Lateral Acceleration')], ['Step', 'Lateral Accel due to Road Roll'], 'Lateral Accel due to Road Roll')
-        self.plot_data(ax[3], [(np.array(self.state_history)[:, 1], 'v_ego')], ['Step', 'v_ego'], 'v_ego')
-        plt.pause(0.01)
+        if not args.no_graph:
+          self.plot_data(ax[0], [(self.target_lataccel_history, 'Target lataccel'), (self.current_lataccel_history, 'Current lataccel')], ['Step', 'Lateral Acceleration'], 'Lateral Acceleration')
+          self.plot_data(ax[1], [(self.action_history, 'Action')], ['Step', 'Action'], 'Action')
+          self.plot_data(ax[2], [(np.array(self.state_history)[:, 0], 'Roll Lateral Acceleration')], ['Step', 'Lateral Accel due to Road Roll'], 'Lateral Accel due to Road Roll')
+          self.plot_data(ax[3], [(np.array(self.state_history)[:, 1], 'v_ego')], ['Step', 'v_ego'], 'v_ego')
+          plt.pause(0.01)
 
-    if self.debug:
+    if self.debug and not args.no_graph:
       plt.ioff()
-      plt.show()
+      if not args.no_graph:
+        plt.show()
     return self.compute_cost()
 
 
@@ -206,13 +207,20 @@ if __name__ == "__main__":
   parser.add_argument("--num_segs", type=int, default=100)
   parser.add_argument("--debug", action='store_true')
   parser.add_argument("--controller", default='simple', choices=available_controllers)
+  parser.add_argument("--kp", type=float, default=0.2)
+  parser.add_argument("--ki", type=float, default=0.2)
+  parser.add_argument("--kd", type=float, default=0.2)
+  parser.add_argument("--no-graph", action='store_true')
   args = parser.parse_args()
 
   tinyphysicsmodel = TinyPhysicsModel(args.model_path, debug=args.debug)
 
   data_path = Path(args.data_path)
   if data_path.is_file():
-    controller = importlib.import_module(f'controllers.{args.controller}').Controller()
+    if args.controller == 'pid':
+        controller = importlib.import_module(f'controllers.{args.controller}').Controller(args.kp, args.ki, args.kd)
+    else:
+        controller = importlib.import_module(f'controllers.{args.controller}').Controller()
     sim = TinyPhysicsSimulator(tinyphysicsmodel, args.data_path, controller=controller, debug=args.debug)
     costs = sim.rollout()
     print(f"\nAverage lataccel_cost: {costs['lataccel_cost']:>6.4}, average jerk_cost: {costs['jerk_cost']:>6.4}, average total_cost: {costs['total_cost']:>6.4}")
@@ -220,16 +228,21 @@ if __name__ == "__main__":
     costs = []
     files = sorted(data_path.iterdir())[:args.num_segs]
     for data_file in tqdm(files, total=len(files)):
-      controller = importlib.import_module(f'controllers.{args.controller}').Controller()
+      if args.controller == 'pid':
+          controller = importlib.import_module(f'controllers.{args.controller}').Controller(args.kp, args.ki, args.kd)
+      else:
+          controller = importlib.import_module(f'controllers.{args.controller}').Controller()
       sim = TinyPhysicsSimulator(tinyphysicsmodel, str(data_file), controller=controller, debug=args.debug)
       cost = sim.rollout()
       costs.append(cost)
     costs_df = pd.DataFrame(costs)
-    print(f"\nAverage lataccel_cost: {np.mean(costs_df['lataccel_cost']):>6.4}, average jerk_cost: {np.mean(costs_df['jerk_cost']):>6.4}, average total_cost: {np.mean(costs_df['total_cost']):>6.4}")
-    for cost in costs_df.columns:
-      plt.hist(costs_df[cost], bins=np.arange(0, 1000, 10), label=cost, alpha=0.5)
-    plt.xlabel('costs')
-    plt.ylabel('Frequency')
-    plt.title('costs Distribution')
-    plt.legend()
-    plt.show()
+    print(f"\nAverage lataccel_cost: {np.mean(costs_df['lataccel_cost']):>6.4}, average jerk_cost: {np.mean(costs_df['jerk_cost']):>6.4}, average sum_total_cost: {np.mean(costs_df['total_cost']):>6.4}")
+    if not args.no_graph:
+      for cost in costs_df.columns:
+        plt.hist(costs_df[cost], bins=np.arange(0, 1000, 10), label=cost, alpha=0.5)
+      plt.xlabel('costs')
+      plt.ylabel('Frequency')
+      plt.title('costs Distribution')
+      plt.legend()
+      plt.show()
+
