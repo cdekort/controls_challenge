@@ -12,15 +12,14 @@ START_POPULATIONS = 2000  # Max number of total spawned populations
 STEPSIZE = 1e-3  # Step size for gradient descent
 LEARNING_RATE = 1e-6  # Learning rate for gradient descent
 EPOCHS = 10  # Max epochs per population
-BATCH_SIZE_STAGES = [(5, 0.1), (50, 0.1), (1000, 0.05), (20000, 1)]
-#:wa]  # Batch size, survival rate for next stage
+BATCH_SIZE_STAGES = [(5, 0.1), (50, 0.1), (1000, 0.05), (20000, 1)] # Batch size and survival rate for the next generation
 
 optimal_population_numbers = []
 all_pids = []
 all_costs = []
 
 
-# Get total cost from tinyphysics simulator, by piping the process output from ProcessPoolExecutor to be more performent than using the class with ThreadPoolExecutor. Lilely due to bottlenecks onnix runtime.
+# Get total cost from tinyphysics simulator, by piping the process output from ProcessPoolExecutor to be more performent than using the class with ThreadPoolExecutor. Lilely due to bottlenecks in current setup of onnix runtime.
 def run_simulation(pid):
     p, i, d = pid
     result = subprocess.run(
