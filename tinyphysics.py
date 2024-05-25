@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
   data_path = Path(args.data_path)
   if data_path.is_file():
-    if args.controller == 'pid':
+    if args.controller == 'pid_tune':
         controller = importlib.import_module(f'controllers.{args.controller}').Controller(args.kp, args.ki, args.kd)
     else:
         controller = importlib.import_module(f'controllers.{args.controller}').Controller()
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     costs = []
     files = sorted(data_path.iterdir())[:args.num_segs]
     for data_file in tqdm(files, total=len(files)):
-      if args.controller == 'pid':
+      if args.controller == 'pid_tune':
           controller = importlib.import_module(f'controllers.{args.controller}').Controller(args.kp, args.ki, args.kd)
       else:
           controller = importlib.import_module(f'controllers.{args.controller}').Controller()
