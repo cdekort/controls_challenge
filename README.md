@@ -23,7 +23,7 @@ Initial testing and tuning was done on an NVidia 2070. The final results were ac
 The tuning resulted in a PI controller with corresponding values 0.01846154 and 0.09230769 on the final sample 20k size. The average cost on this sample size was equal to 34.86. The effects of the derivative gain seem to be disproportial small to the other two parameters, which allows us to continue with a PI controller for the final benchmark.
 
 ## 2. Final benchmark
-The tuned PID controller surpasses the provided baseline on the given benchmarks. The final results for the provided benchmark can be found under [results.html](link).
+The tuned PID controller surpasses the provided baseline on the given benchmarks. The final results for the provided benchmark can be found under [results.html](https://github.com/cdekort/controls_challenge/blob/master/report.html).
 
 
 # Recommendations
